@@ -17,15 +17,22 @@ namespace RaspberryPiDotNet
 	///    cc -shared bcm2835.o -o libbcm2835.so
 	/// Place the shared object in the same directory as the executable and other assemblies.
 	/// </summary>
-	public class GPIOMem : GPIO
+	public unsafe class GPIOMem : GPIO
 	{
 		#region Static Constructor
 		static GPIOMem() {
 			// initialize the mapped memory
 			if (!bcm2835_init())
 				throw new Exception("Unable to initialize bcm2835.so library");
+
+			SetAddr = bcm2835_gpio_set_multi_addr();
+			ClrAddr = bcm2835_gpio_clr_multi_addr();
 		}
 		#endregion
+
+		//It's public because performance can more speed up, when controlled directly by the application
+		public static uint* SetAddr;
+		public static uint* ClrAddr;
 
 		#region Constructor
 		/// <summary>
@@ -88,7 +95,13 @@ namespace RaspberryPiDotNet
 		/// <param name="value">The value to write to the pin</param>
 		public override void Write(bool value) {
 			base.Write(value);
-			bcm2835_gpio_write(_pin, value);
+			//bcm2835_gpio_write(_pin, value);
+			if (value) {
+				*SetAddr = (uint)Mask;
+			}
+			else {
+				*ClrAddr = (uint)Mask;
+			}
 		}
 
 		/// <summary>
@@ -125,6 +138,12 @@ namespace RaspberryPiDotNet
 
 		[DllImport("libbcm2835.so", EntryPoint = "bcm2835_gpio_write_multi")]
 		static extern void bcm2835_gpio_write_multi(GPIOPinMask mask, bool on);
+
+		[DllImport("libbcm2835.so", EntryPoint = "bcm2835_gpio_set_multi_addr")]
+		static extern uint* bcm2835_gpio_set_multi_addr();
+
+		[DllImport("libbcm2835.so", EntryPoint = "bcm2835_gpio_clr_multi_addr")]
+		static extern uint* bcm2835_gpio_clr_multi_addr();
 
 		#endregion
 
