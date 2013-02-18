@@ -12,7 +12,7 @@ namespace RaspberryPiDotNet
 		/// <summary>
 		/// Dictionary that stores created (exported) pins that where not disposed.
 		/// </summary>
-		private static Dictionary<GPIOPins, GPIO> _exportedPins = new Dictionary<GPIOPins, GPIO>();
+		private static Dictionary<GPIOPins, WeakReference> _exportedPins = new Dictionary<GPIOPins, WeakReference>();
 
 		/// <summary>
 		/// The currently assigned GPIO pin. Used for class methods.
@@ -81,7 +81,7 @@ namespace RaspberryPiDotNet
 			lock (_exportedPins) {
 				if (_exportedPins.ContainsKey(pin))
 					throw new Exception("Cannot use pin with multiple instances. Unexport the previous instance with Dispose() first! (pin " + (uint)pin + ")");
-				_exportedPins[pin] = this;
+				_exportedPins[pin] = new WeakReference(this);
 
 				_pin = pin;
 				try {
@@ -132,12 +132,21 @@ namespace RaspberryPiDotNet
 		/// <param name="dir">The direction the pin is to have</param>
 		/// <returns>The GPIO instance representing the pin</returns>
 		public static GPIO CreatePin(GPIOPins pin, GPIODirection dir) {
-			lock (_exportedPins)
-				if (_exportedPins.ContainsKey(pin)) {
-					if (_exportedPins[pin].PinDirection != dir)
-						_exportedPins[pin].PinDirection = dir;
-					return _exportedPins[pin];
+			lock (_exportedPins) {
+				if (_exportedPins.ContainsKey(pin) ) {
+					var reference = _exportedPins[pin];
+					if (reference.IsAlive) {
+						var gpio = (GPIO)_exportedPins[pin].Target;
+						if (gpio.PinDirection != dir)
+							gpio.PinDirection = dir;
+						return gpio;
+					}
+					else {
+						_exportedPins.Remove(pin);
+					}
 				}
+
+			}
 
 			try {
 				return new GPIOMem(pin, dir);
